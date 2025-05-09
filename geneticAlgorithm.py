@@ -13,37 +13,19 @@ class GeneticAlgorithm:
         pop_low: float,
         pop_high: float,
         maximization: bool = True,
-        penalty: Callable = lambda x: x,
+        penalty_type=0,
     ):
         self.eval_function = eval_function
         self.maximization = maximization
         self.pop_low = pop_low
         self.pop_high = pop_high
         self.fitness_evaluations = 0
-        self.penalty = penalty
-        # add penalty as an init parameter
+        self.penalty_type = penalty_type
+        self.generation_num = 1
 
     def evaluate(self, vector):
         self.fitness_evaluations += 1
-        result = self.eval_function(vector)
-        # add self.penalty
-        # add binary_convert_to_float
-        return result
-
-    def binary_convert_to_float(self, binary_string: str):
-        reversed_string: str = binary_string[::-1]
-        float_number = 0
-        for bit_number in range(len(reversed_string)):
-            float_number += reversed_string[bit_number] * (2**bit_number)
-
-        value = self.pop_low + (
-            float_number
-            * ((self.pop_high - self.pop_low) / (2 ** len(binary_string) - 1))
-        )
-        return value
-
-    def dynamic_penalty(self):
-        print("foo")
+        return self.eval_function(vector)
 
     def initialize_population(
         self,
@@ -56,23 +38,9 @@ class GeneticAlgorithm:
         return population
 
     def initialize_population_binary(
-        self, population_size: int, chromosome_length: int, precision_length: int
+        self, population_size: int, chromosome_length: int
     ) -> np.ndarray:
-
-        def generate_binary_strings(length: int):
-            binary_string = ""
-            for _ in range(length):
-                random_bit = str(rd.randint(0, 1))
-                binary_string += random_bit
-            return binary_string
-
-        population = []
-        for _ in range(population_size):
-            pop_vector = []
-            for _ in range(chromosome_length):
-                pop_vector.append(generate_binary_strings(precision_length))
-            population.append(pop_vector)
-        return np.array(population)
+        return np.random.randint(0, 2, size=(population_size, chromosome_length))
 
     def proportional_selection(self, population: np.ndarray):
         selection_vector = np.zeros(len(population))
@@ -161,84 +129,6 @@ class GeneticAlgorithm:
             offspring_list.append(np.array(offspring))
         return offspring_list
 
-    def truncation_selection(
-        self, population: np.ndarray, truncation: float
-    ) -> np.ndarray:
-        truncation_index: int = int(len(population) * truncation)
-        fitnesses = list(map(lambda x: self.evaluate(x), population))
-        sorted_indices = (
-            np.argsort(fitnesses)[::-1] if self.maximization else np.argsort(fitnesses)
-        )
-        sorted_population = population[sorted_indices]
-        sampled_population = sorted_population[:truncation_index]
-        truncated_population = list(sampled_population)
-        for _ in range(0, len(population) - len(truncated_population)):
-            random_index = int(len(sampled_population) * np.random.random())
-            truncated_population.append(sampled_population[random_index])
-        return np.array(truncated_population)
-
-    def deterministic_tournament_selection(self, population: np.ndarray) -> np.ndarray:
-        winners = list()
-        for _ in range(0, len(population)):
-            fighter1 = population[np.random.randint(0, len(population))]
-            fighter2 = population[np.random.randint(0, len(population))]
-            score1 = self.evaluate(fighter1)
-            score2 = self.evaluate(fighter2)
-            if self.maximization == False:
-                score1 = (1 / score1) + ALPHA
-                score2 = (1 / score2) + ALPHA
-            if score1 > score2:
-                winners.append(fighter1)
-            else:
-                winners.append(fighter2)
-        return np.array(winners)
-
-    def stochastic_binary_tournament_selection(
-        self, population: np.ndarray, probability: float = 0.5
-    ) -> np.ndarray:
-        winners = list()
-        for _ in range(0, len(population)):
-            fighter1 = population[np.random.randint(0, len(population))]
-            fighter2 = population[np.random.randint(0, len(population))]
-            score1 = self.evaluate(fighter1)
-            score2 = self.evaluate(fighter2)
-            if self.maximization == False:
-                score1 = (1 / score1) + ALPHA
-                score2 = (1 / score2) + ALPHA
-
-            if score1 > score2:
-                stronger, weaker = fighter1, fighter2
-            else:
-                stronger, weaker = fighter2, fighter1
-
-            tourney_float = np.random.random()
-            if tourney_float < probability:
-                winners.append(stronger)
-            else:
-                winners.append(weaker)
-        return np.array(winners)
-
-    def linear_ranking_selection(self, population: np.ndarray, max=1.5):
-        if len(population) <= 1:
-            return np.ones(len(population))
-
-        fitnesses = [self.evaluate(x) for x in population]
-        sorted_indices = (
-            np.argsort(fitnesses) if self.maximization else np.argsort(fitnesses)[::-1]
-        )
-
-        ranks = np.empty_like(sorted_indices)
-        ranks[sorted_indices] = np.arange(1, len(population) + 1)
-
-        min_val = 2 - max
-        probabilities = [
-            (min_val + ((r - 1) / (len(population) - 1)) * (max - min_val))
-            / len(population)
-            for r in ranks
-        ]
-
-        return np.array(probabilities)
-
     def mutation(self, population, probability=0.05):
         population = population.copy()
 
@@ -256,222 +146,365 @@ class GeneticAlgorithm:
 
         return population
 
+    def binary_bitwise_mutation(self, population, probability=0.05):
+        population = population.copy()
+
+        for i in range(len(population)):
+            for j in range(len(population[i])):
+                if np.random.random() < probability:
+                    population[i][j] = population[i][j] ^ 1
+        self.generation_num += 1
+        return population
+
     def best(self, population):
         fitnesses = list(map(lambda x: self.evaluate(x), population))
         sorted_indices = np.argsort(fitnesses)
-        sorted_population = population[sorted_indices]
-        return sorted_population[0]
+        if self.maximization:
+            return population[sorted_indices[-1]]
+        else:
+            return population[sorted_indices[0]]
 
 
-def knapsack(self, items: List, knapsack_capacity: int) -> int:
-    print("foo")
+def knapsack(
+    items: List,
+    knapsack_capacity: int,
+    item_selection: List,
+    penalty_type=0,
+    generation_num=1,
+) -> int:
+    """
+    Description: Eval Function for 0/1 knapsack problem
+    Params:
+        items: tuple of (weight, value)
+        knapsack_capacity: total weight knapsack can hold
+        item_selection: binary vector of selected items
+    """
+    weight = 0
+    value = 0
+    for item, select in zip(items, item_selection):
+        weight += select * item[0]
+        value += select * item[1]
+    if weight > knapsack_capacity:
+        if penalty_type == 0:
+            value -= 1000
+        else:
+            value -= np.log(generation_num) * (weight - knapsack_capacity)
+    return value
 
 
-def shekel_foxholes(x: np.ndarray) -> float:
-    a = np.array(
-        [
-            [
-                -32,
-                -16,
-                0,
-                16,
-                32,
-                -32,
-                -16,
-                0,
-                16,
-                32,
-                -32,
-                -16,
-                0,
-                16,
-                32,
-                -32,
-                -16,
-                0,
-                16,
-                32,
-                -32,
-                -16,
-                0,
-                16,
-                32,
-            ],
-            [
-                -32,
-                -32,
-                -32,
-                -32,
-                -32,
-                -16,
-                -16,
-                -16,
-                -16,
-                -16,
-                0,
-                0,
-                0,
-                0,
-                0,
-                16,
-                16,
-                16,
-                16,
-                16,
-                32,
-                32,
-                32,
-                32,
-                32,
-            ],
-        ]
-    )
-    sum = 0
-    for i in range(25):
-        first_diff = x[0] - a[0, i]
-        second_diff = x[1] - a[1, i]
-        sum += 1 / (i + 1 + ((first_diff**6) + (second_diff**6)))
-    return 1 / (0.002 + sum)
+def make_knapsack_eval_fn(ga, items, capacity, penalty_type):
+    def eval_fn(vector):
+        return knapsack(
+            items=items,
+            knapsack_capacity=capacity,
+            item_selection=vector,
+            penalty_type=penalty_type,
+            generation_num=ga.generation_num,
+        )
+
+    return eval_fn
 
 
 def main():
     import statistics
 
-    min_bound = -65.536
-    max_bound = 65.536
     crossover_probability = 0.8
     mutation_chance = 0.05
     iterations = 50
     pop_size = 40
     model_runs = 25
+    knapsack_capacity = 150
 
-    # Proportional Selection
+    # Generate item values and weights
+    num_items = 20
+    item_list = [(rd.randint(1, 20), rd.randint(1, 1000)) for _ in range(num_items)]
+
     results = []
+
     for _ in range(model_runs):
-        ga = GeneticAlgorithm(shekel_foxholes, min_bound, max_bound, False)
-        population = ga.initialize_population(pop_size, 2)
+        # Step 1: Create GA instance
+        ga = GeneticAlgorithm(
+            eval_function=None,
+            pop_low=0,
+            pop_high=1,
+            maximization=True,
+            penalty_type=0,
+        )
+
+        # Step 2: Attach dynamic evaluation function
+        ga.eval_function = make_knapsack_eval_fn(
+            ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
+        )
+
+        # Step 3: Initialize binary population
+        population = ga.initialize_population_binary(pop_size, num_items)
+
+        # Step 4: Run GA loop
         for _ in range(iterations):
-            population = ga.mutation(
-                ga.crossover_selection(
-                    ga.roulette_wheel(
-                        population, ga.proportional_selection(population)
-                    ),
-                    crossover_probability,
-                ),
-                mutation_chance,
+            selected = ga.roulette_wheel(
+                population, ga.proportional_selection(population)
             )
-        # Determines best fitness of model run
+            crossed = ga.crossover_selection(
+                selected, crossover_probability, ga.crossover
+            )
+            population = ga.binary_bitwise_mutation(crossed, mutation_chance)
+
+        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
-    # Determines average of model runs
+    # Step 6: Compute summary statistics
     proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
     proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = min(results, key=lambda x: x[1])
-    print(f"Proportional Best: {best}")
-    print(f"Proportional Avg Best Fitness: {proportional_avg_best_fitness}")
-    print(f"Proportional Avg Num Evals: {proportional_avg_num_evals}")
+    best = max(
+        results, key=lambda x: x[1]
+    )  # use max because it's a maximization problem
 
-    # Truncation Selection
-    truncation_cutoffs = [0.25, 0.5, 0.75]
-    for cutoff in truncation_cutoffs:
-        for _ in range(model_runs):
-            ga = GeneticAlgorithm(shekel_foxholes, min_bound, max_bound, False)
-            population = ga.initialize_population(pop_size, 2)
-            results = []
-            for _ in range(iterations):
-                population = ga.mutation(
-                    ga.crossover_selection(
-                        ga.truncation_selection(population, cutoff),
-                        crossover_probability,
-                    ),
-                    mutation_chance,
-                )
-            best_pop = ga.best(population)
-            best_fitness = ga.evaluate(best_pop)
-            results.append((best_pop, best_fitness, ga.fitness_evaluations))
-        trunc_avg_best_fitness = sum(x[1] for x in results) / len(results)
-        trunc_avg_num_evals = sum(x[2] for x in results) / len(results)
-        best = min(results, key=lambda x: x[1])
-        print(f"Truncation {cutoff} Best: {best}")
-        print(f"Truncation {cutoff} Avg Best Fitness: {trunc_avg_best_fitness}")
-        print(f"Truncation {cutoff} Avg Num Evals: {trunc_avg_num_evals}")
+    print(f"One Point Best: {best}")
+    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
 
-    # Deterministic Tournament Selection
+    # ------------------------.5 Uniform Crossover----------------------------#
+
+    results = []
+
     for _ in range(model_runs):
-        ga = GeneticAlgorithm(shekel_foxholes, min_bound, max_bound, False)
-        population = ga.initialize_population(pop_size, 2)
-        results = []
+        # Step 1: Create GA instance
+        ga = GeneticAlgorithm(
+            eval_function=None,
+            pop_low=0,
+            pop_high=1,
+            maximization=True,
+            penalty_type=0,
+        )
+
+        # Step 2: Attach dynamic evaluation function
+        ga.eval_function = make_knapsack_eval_fn(
+            ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
+        )
+
+        # Step 3: Initialize binary population
+        population = ga.initialize_population_binary(pop_size, num_items)
+
+        # Step 4: Run GA loop
         for _ in range(iterations):
-            population = ga.mutation(
-                ga.crossover_selection(
-                    ga.deterministic_tournament_selection(population),
-                    crossover_probability,
-                ),
-                mutation_chance,
+            selected = ga.roulette_wheel(
+                population, ga.proportional_selection(population)
             )
+            crossed = ga.crossover_selection(
+                selected, crossover_probability, ga.uniform_crossover
+            )
+            population = ga.binary_bitwise_mutation(crossed, mutation_chance)
+
+        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
-    dt_avg_best_fitness = sum(x[1] for x in results) / len(results)
-    dt_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = min(results, key=lambda x: x[1])
-    print(f"Determinstic Tournament Best: {best}")
-    print(f"Deterministic Tournament Avg Best Fitness: {dt_avg_best_fitness}")
-    print(f"Deterministic Tournament Avg Num Evals: {dt_avg_num_evals}")
 
-    # Stochastic Binary Tournament Selection
-    tournament_probabilities = [0.9, 0.8, 0.7]
-    for prob in tournament_probabilities:
-        for _ in range(model_runs):
-            ga = GeneticAlgorithm(shekel_foxholes, min_bound, max_bound, False)
-            population = ga.initialize_population(pop_size, 2)
-            results = []
-            for _ in range(iterations):
-                population = ga.mutation(
-                    ga.crossover_selection(
-                        ga.stochastic_binary_tournament_selection(population, prob),
-                        crossover_probability,
-                    ),
-                    mutation_chance,
-                )
-            best_pop = ga.best(population)
-            best_fitness = ga.evaluate(best_pop)
-            results.append((best_pop, best_fitness, ga.fitness_evaluations))
-        sbt_avg_best_fitness = sum(x[1] for x in results) / len(results)
-        sbt_avg_num_evals = sum(x[2] for x in results) / len(results)
-        best = min(results, key=lambda x: x[1])
-        print(f"Stochastic Tournament {prob} Best: {best}")
-        print(f"Stochastic Tournament {prob} Avg Best Fitness: {sbt_avg_best_fitness}")
-        print(f"Stochastic Tournament {prob} Avg Num Evals: {sbt_avg_num_evals}")
+    # Step 6: Compute summary statistics
+    proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
+    proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
+    best = max(
+        results, key=lambda x: x[1]
+    )  # use max because it's a maximization problem
 
-    # Linear Ranking Selection
-    max_copies = [2.0, 1.7, 1.4]
-    for val in max_copies:
-        for _ in range(model_runs):
-            ga = GeneticAlgorithm(shekel_foxholes, min_bound, max_bound, False)
-            population = ga.initialize_population(pop_size, 2)
-            results = []
-            for _ in range(iterations):
-                population = ga.mutation(
-                    ga.crossover_selection(
-                        ga.roulette_wheel(
-                            population, ga.linear_ranking_selection(population, val)
-                        ),
-                        crossover_probability,
-                    ),
-                    mutation_chance,
-                )
-            best_pop = ga.best(population)
-            best_fitness = ga.evaluate(best_pop)
-            results.append((best_pop, best_fitness, ga.fitness_evaluations))
-        rank_avg_best_fitness = sum(x[1] for x in results) / len(results)
-        rank_avg_num_evals = sum(x[2] for x in results) / len(results)
-        best = min(results, key=lambda x: x[1])
-        print(f"Linear Ranking {val} Best: {best}")
-        print(f"Linear Ranking {val} Avg Best Fitness: {rank_avg_best_fitness}")
-        print(f"Linear Ranking {val} Avg Num Evals: {rank_avg_num_evals}")
+    print(f"One Point Best: {best}")
+    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+
+    # --------------------------------------Multi Parent------------------------------------#
+
+    results = []
+
+    for _ in range(model_runs):
+        # Step 1: Create GA instance
+        ga = GeneticAlgorithm(
+            eval_function=None,
+            pop_low=0,
+            pop_high=1,
+            maximization=True,
+            penalty_type=0,
+        )
+
+        # Step 2: Attach dynamic evaluation function
+        ga.eval_function = make_knapsack_eval_fn(
+            ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
+        )
+
+        # Step 3: Initialize binary population
+        population = ga.initialize_population_binary(pop_size, num_items)
+
+        # Step 4: Run GA loop
+        for _ in range(iterations):
+            selected = ga.roulette_wheel(
+                population, ga.proportional_selection(population)
+            )
+            crossed = ga.crossover_selection(
+                selected, crossover_probability, ga.crossover
+            )
+            population = ga.binary_bitwise_mutation(crossed, mutation_chance)
+
+        # Step 5: Record best result
+        best_pop = ga.best(population)
+        best_fitness = ga.evaluate(best_pop)
+        results.append((best_pop, best_fitness, ga.fitness_evaluations))
+
+    # Step 6: Compute summary statistics
+    proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
+    proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
+    best = max(
+        results, key=lambda x: x[1]
+    )  # use max because it's a maximization problem
+
+    print(f"One Point Best: {best}")
+    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+
+    # -------------------------------------Dynamic Penalty-------------------------------#
+
+    results = []
+
+    for _ in range(model_runs):
+        # Step 1: Create GA instance
+        ga = GeneticAlgorithm(
+            eval_function=None,
+            pop_low=0,
+            pop_high=1,
+            maximization=True,
+            penalty_type=1,
+        )
+
+        # Step 2: Attach dynamic evaluation function
+        ga.eval_function = make_knapsack_eval_fn(
+            ga, items=item_list, capacity=knapsack_capacity, penalty_type=1
+        )
+
+        # Step 3: Initialize binary population
+        population = ga.initialize_population_binary(pop_size, num_items)
+
+        # Step 4: Run GA loop
+        for _ in range(iterations):
+            selected = ga.roulette_wheel(
+                population, ga.proportional_selection(population)
+            )
+            crossed = ga.crossover_selection(
+                selected, crossover_probability, ga.crossover
+            )
+            population = ga.binary_bitwise_mutation(crossed, mutation_chance)
+
+        # Step 5: Record best result
+        best_pop = ga.best(population)
+        best_fitness = ga.evaluate(best_pop)
+        results.append((best_pop, best_fitness, ga.fitness_evaluations))
+
+    # Step 6: Compute summary statistics
+    proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
+    proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
+    best = max(
+        results, key=lambda x: x[1]
+    )  # use max because it's a maximization problem
+
+    print(f"One Point Best: {best}")
+    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+
+    # --------------------------------Extreme Nothing Fits---------------------#
+
+    # Still to make, just change the list
+    results = []
+
+    for _ in range(model_runs):
+        # Step 1: Create GA instance
+        ga = GeneticAlgorithm(
+            eval_function=None,
+            pop_low=0,
+            pop_high=1,
+            maximization=True,
+            penalty_type=0,
+        )
+
+        # Step 2: Attach dynamic evaluation function
+        ga.eval_function = make_knapsack_eval_fn(
+            ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
+        )
+
+        # Step 3: Initialize binary population
+        population = ga.initialize_population_binary(pop_size, num_items)
+
+        # Step 4: Run GA loop
+        for _ in range(iterations):
+            selected = ga.roulette_wheel(
+                population, ga.proportional_selection(population)
+            )
+            crossed = ga.crossover_selection(
+                selected, crossover_probability, ga.crossover
+            )
+            population = ga.binary_bitwise_mutation(crossed, mutation_chance)
+
+        # Step 5: Record best result
+        best_pop = ga.best(population)
+        best_fitness = ga.evaluate(best_pop)
+        results.append((best_pop, best_fitness, ga.fitness_evaluations))
+
+    # Step 6: Compute summary statistics
+    proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
+    proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
+    best = max(
+        results, key=lambda x: x[1]
+    )  # use max because it's a maximization problem
+
+    print(f"One Point Best: {best}")
+    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+
+    # --------------------------------Everything Fits--------------------------#
+
+    results = []
+
+    for _ in range(model_runs):
+        # Step 1: Create GA instance
+        ga = GeneticAlgorithm(
+            eval_function=None,
+            pop_low=0,
+            pop_high=1,
+            maximization=True,
+            penalty_type=0,
+        )
+
+        # Step 2: Attach dynamic evaluation function
+        ga.eval_function = make_knapsack_eval_fn(
+            ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
+        )
+
+        # Step 3: Initialize binary population
+        population = ga.initialize_population_binary(pop_size, num_items)
+
+        # Step 4: Run GA loop
+        for _ in range(iterations):
+            selected = ga.roulette_wheel(
+                population, ga.proportional_selection(population)
+            )
+            crossed = ga.crossover_selection(
+                selected, crossover_probability, ga.crossover
+            )
+            population = ga.binary_bitwise_mutation(crossed, mutation_chance)
+
+        # Step 5: Record best result
+        best_pop = ga.best(population)
+        best_fitness = ga.evaluate(best_pop)
+        results.append((best_pop, best_fitness, ga.fitness_evaluations))
+
+    # Step 6: Compute summary statistics
+    proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
+    proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
+    best = max(
+        results, key=lambda x: x[1]
+    )  # use max because it's a maximization problem
+
+    print(f"One Point Best: {best}")
+    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
 
 
 if __name__ == "__main__":
