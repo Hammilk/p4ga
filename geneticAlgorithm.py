@@ -171,7 +171,7 @@ def knapsack(
     item_selection: List,
     penalty_type=0,
     generation_num=1,
-) -> int:
+) -> float:
     """
     Description: Eval Function for 0/1 knapsack problem
     Params:
@@ -186,10 +186,20 @@ def knapsack(
         value += select * item[1]
     if weight > knapsack_capacity:
         if penalty_type == 0:
-            value -= 1000
+            value = max(value - 10000000, 0 + ALPHA)
         else:
-            value -= np.log(generation_num) * (weight - knapsack_capacity)
+            value = max(
+                value - (100 * np.log(generation_num)) * (weight - knapsack_capacity),
+                0 + ALPHA,
+            )
     return value
+
+
+def knapsack_weight(items: List, item_selection: np.ndarray):
+    weight = 0
+    for item, select in zip(items, item_selection):
+        weight += select * item[0]
+    return weight
 
 
 def make_knapsack_eval_fn(ga, items, capacity, penalty_type):
@@ -210,10 +220,10 @@ def main():
 
     crossover_probability = 0.8
     mutation_chance = 0.05
-    iterations = 50
-    pop_size = 40
-    model_runs = 25
-    knapsack_capacity = 150
+    iterations = 500
+    pop_size = 50
+    model_runs = 30
+    knapsack_capacity = 100
 
     # Generate item values and weights
     num_items = 20
@@ -252,6 +262,7 @@ def main():
         # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
+
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
     # Step 6: Compute summary statistics
@@ -262,6 +273,8 @@ def main():
     )  # use max because it's a maximization problem
 
     print(f"One Point Best: {best}")
+    print(f"Best Weight: {knapsack_weight(item_list, best[0])}")
+    print(f"One Point Capacity: {knapsack_capacity}")
     print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
     print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
 
@@ -270,7 +283,6 @@ def main():
     results = []
 
     for _ in range(model_runs):
-        # Step 1: Create GA instance
         ga = GeneticAlgorithm(
             eval_function=None,
             pop_low=0,
@@ -279,15 +291,12 @@ def main():
             penalty_type=0,
         )
 
-        # Step 2: Attach dynamic evaluation function
         ga.eval_function = make_knapsack_eval_fn(
             ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
         )
 
-        # Step 3: Initialize binary population
         population = ga.initialize_population_binary(pop_size, num_items)
 
-        # Step 4: Run GA loop
         for _ in range(iterations):
             selected = ga.roulette_wheel(
                 population, ga.proportional_selection(population)
@@ -297,28 +306,25 @@ def main():
             )
             population = ga.binary_bitwise_mutation(crossed, mutation_chance)
 
-        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
-    # Step 6: Compute summary statistics
     proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
     proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = max(
-        results, key=lambda x: x[1]
-    )  # use max because it's a maximization problem
+    best = max(results, key=lambda x: x[1])
 
-    print(f"One Point Best: {best}")
-    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
-    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+    print(f".5 Uniform Best: {best}")
+    print(f"Best Weight: {knapsack_weight(item_list, best[0])}")
+    print(f".5 Uniform Capacity: {knapsack_capacity}")
+    print(f".5 Uniform Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f".5 Uniform Avg Num Evals: {proportional_avg_num_evals}")
 
     # --------------------------------------Multi Parent------------------------------------#
 
     results = []
 
     for _ in range(model_runs):
-        # Step 1: Create GA instance
         ga = GeneticAlgorithm(
             eval_function=None,
             pop_low=0,
@@ -327,15 +333,12 @@ def main():
             penalty_type=0,
         )
 
-        # Step 2: Attach dynamic evaluation function
         ga.eval_function = make_knapsack_eval_fn(
             ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
         )
 
-        # Step 3: Initialize binary population
         population = ga.initialize_population_binary(pop_size, num_items)
 
-        # Step 4: Run GA loop
         for _ in range(iterations):
             selected = ga.roulette_wheel(
                 population, ga.proportional_selection(population)
@@ -345,28 +348,26 @@ def main():
             )
             population = ga.binary_bitwise_mutation(crossed, mutation_chance)
 
-        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
-    # Step 6: Compute summary statistics
     proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
     proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = max(
-        results, key=lambda x: x[1]
-    )  # use max because it's a maximization problem
+    best = max(results, key=lambda x: x[1])
 
-    print(f"One Point Best: {best}")
-    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
-    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+    print(f"Multi Parent Best: {best}")
+    print(f"Multi Parent Capacity: {knapsack_capacity}")
+    print(f"Best Weight: {knapsack_weight(item_list, best[0])}")
+
+    print(f"Multi Parent Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"Multi Parent Avg Num Evals: {proportional_avg_num_evals}")
 
     # -------------------------------------Dynamic Penalty-------------------------------#
 
     results = []
 
     for _ in range(model_runs):
-        # Step 1: Create GA instance
         ga = GeneticAlgorithm(
             eval_function=None,
             pop_low=0,
@@ -375,15 +376,12 @@ def main():
             penalty_type=1,
         )
 
-        # Step 2: Attach dynamic evaluation function
         ga.eval_function = make_knapsack_eval_fn(
             ga, items=item_list, capacity=knapsack_capacity, penalty_type=1
         )
 
-        # Step 3: Initialize binary population
         population = ga.initialize_population_binary(pop_size, num_items)
 
-        # Step 4: Run GA loop
         for _ in range(iterations):
             selected = ga.roulette_wheel(
                 population, ga.proportional_selection(population)
@@ -393,29 +391,26 @@ def main():
             )
             population = ga.binary_bitwise_mutation(crossed, mutation_chance)
 
-        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
-    # Step 6: Compute summary statistics
     proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
     proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = max(
-        results, key=lambda x: x[1]
-    )  # use max because it's a maximization problem
+    best = max(results, key=lambda x: x[1])
 
-    print(f"One Point Best: {best}")
-    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
-    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+    print(f"Dynamic Best: {best}")
+    print(f"Best Weight: {knapsack_weight(item_list, best[0])}")
+    print(f"Dynamic Capacity: {knapsack_capacity}")
+    print(f"Dynamic Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"Dynamic Avg Num Evals: {proportional_avg_num_evals}")
 
     # --------------------------------Extreme Nothing Fits---------------------#
 
-    # Still to make, just change the list
     results = []
+    knapsack_capacity = 1
 
     for _ in range(model_runs):
-        # Step 1: Create GA instance
         ga = GeneticAlgorithm(
             eval_function=None,
             pop_low=0,
@@ -424,15 +419,12 @@ def main():
             penalty_type=0,
         )
 
-        # Step 2: Attach dynamic evaluation function
         ga.eval_function = make_knapsack_eval_fn(
             ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
         )
 
-        # Step 3: Initialize binary population
         population = ga.initialize_population_binary(pop_size, num_items)
 
-        # Step 4: Run GA loop
         for _ in range(iterations):
             selected = ga.roulette_wheel(
                 population, ga.proportional_selection(population)
@@ -442,28 +434,26 @@ def main():
             )
             population = ga.binary_bitwise_mutation(crossed, mutation_chance)
 
-        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
-    # Step 6: Compute summary statistics
     proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
     proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = max(
-        results, key=lambda x: x[1]
-    )  # use max because it's a maximization problem
+    best = max(results, key=lambda x: x[1])
 
-    print(f"One Point Best: {best}")
-    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
-    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+    print(f"Nothing Fits Best: {best}")
+    print(f"Best Weight: {knapsack_weight(item_list, best[0])}")
+    print(f"Nothing Fits Capacity: {knapsack_capacity}")
+    print(f"Nothing Fits Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"Nothing Fits Avg Num Evals: {proportional_avg_num_evals}")
 
     # --------------------------------Everything Fits--------------------------#
 
     results = []
+    knapsack_capacity = 1000000
 
     for _ in range(model_runs):
-        # Step 1: Create GA instance
         ga = GeneticAlgorithm(
             eval_function=None,
             pop_low=0,
@@ -472,15 +462,12 @@ def main():
             penalty_type=0,
         )
 
-        # Step 2: Attach dynamic evaluation function
         ga.eval_function = make_knapsack_eval_fn(
             ga, items=item_list, capacity=knapsack_capacity, penalty_type=0
         )
 
-        # Step 3: Initialize binary population
         population = ga.initialize_population_binary(pop_size, num_items)
 
-        # Step 4: Run GA loop
         for _ in range(iterations):
             selected = ga.roulette_wheel(
                 population, ga.proportional_selection(population)
@@ -490,21 +477,19 @@ def main():
             )
             population = ga.binary_bitwise_mutation(crossed, mutation_chance)
 
-        # Step 5: Record best result
         best_pop = ga.best(population)
         best_fitness = ga.evaluate(best_pop)
         results.append((best_pop, best_fitness, ga.fitness_evaluations))
 
-    # Step 6: Compute summary statistics
     proportional_avg_best_fitness = sum(x[1] for x in results) / len(results)
     proportional_avg_num_evals = sum(x[2] for x in results) / len(results)
-    best = max(
-        results, key=lambda x: x[1]
-    )  # use max because it's a maximization problem
+    best = max(results, key=lambda x: x[1])
 
-    print(f"One Point Best: {best}")
-    print(f"One Point Avg Best Fitness: {proportional_avg_best_fitness}")
-    print(f"One Point Avg Num Evals: {proportional_avg_num_evals}")
+    print(f"Trivial Fit Best: {best}")
+    print(f"Best Weight: {knapsack_weight(item_list, best[0])}")
+    print(f"Trivial Fit Capacity: {knapsack_capacity}")
+    print(f"Trivial Fit Avg Best Fitness: {proportional_avg_best_fitness}")
+    print(f"Trivial Fit Avg Num Evals: {proportional_avg_num_evals}")
 
 
 if __name__ == "__main__":
